@@ -63,12 +63,10 @@ async def openai_compatible_chat(
     verify_api_key(x_api_key, authorization)
 
     try:
-        # Extract the model from request
         LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://litellm.moreminimore.com/v1")
         LITELLM_MODEL = os.getenv("LITELLM_MODEL", "ollama_chat/qwen3-30b-a3b")
-        LITELLM_API_KEY = os.getenv("LITELLM_API_KEY")  # ← Ensure this is set
+        LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
 
-        # Forward to LiteLLM
         headers = {}
         if LITELLM_API_KEY:
             headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
@@ -76,13 +74,10 @@ async def openai_compatible_chat(
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{LITELLM_PROXY_URL}/chat/completions",
-                json={
-                    "model": LITELLM_MODEL,  # Use model defined in `.env`
-                    "messages": request.messages
-                },
+                json={"model": LITELLM_MODEL, "messages": request.messages},
                 headers=headers
             )
-            return resp.json()
+            return resp.json()  # Forward LiteLLM's response directly
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
