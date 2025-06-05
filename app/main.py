@@ -19,18 +19,23 @@ async def get_models(
 ):
     """
     Proxy for LiteLLM's /models endpoint.
-    Supports both `x-api-key` and `Authorization: Bearer <key>` headers.
+    Passes the Bearer token to LiteLLM.
     """
+    # Validate wrapper API key first
     verify_api_key(x_api_key, authorization)
 
-    LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://localhost:4000")
-    
+    LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1")
+
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(f"{LITELLM_PROXY_URL}/models")
+            # Pass the LiteLLM API key in headers
+            headers = {
+                "Authorization": f"Bearer {os.getenv('LITELLM_API_KEY', 'missing-key')}"
+            }
+            resp = await client.get(f"{LITELLM_PROXY_URL}/models", headers=headers)
             data = resp.json()
             
-            # Optional: Filter/sanitize model names for n8n
+            # Optional: Sanitize model names
             filtered_models = [
                 {**model, "id": model["id"].replace("ollama_chat/", "")} 
                 for model in data.get("data", [])
