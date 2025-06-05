@@ -63,22 +63,21 @@ async def openai_compatible_chat(
     verify_api_key(x_api_key, authorization)
 
     try:
-        # Flatten messages into a single prompt
-        prompt = "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
-
-        # Determine if we need to pass the API key
+        # Extract the model from request
+        LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://litellm.moreminimore.com/v1")
         LITELLM_MODEL = os.getenv("LITELLM_MODEL", "ollama_chat/qwen3-30b-a3b")
-        headers = {}
+        LITELLM_API_KEY = os.getenv("LITELLM_API_KEY")  # ← Ensure this is set
 
-        # Only send API key if the model requires it (e.g., OpenAI)
-        if LITELLM_MODEL.startswith("openai/"):
-            headers["Authorization"] = f"Bearer {os.getenv('LITELLM_API_KEY')}"
-        
+        # Forward to LiteLLM
+        headers = {}
+        if LITELLM_API_KEY:
+            headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{os.getenv('LITELLM_PROXY_URL', 'https://litellm.moreminimore.com/v1')}/chat/completions",
+                f"{LITELLM_PROXY_URL}/chat/completions",
                 json={
-                    "model": LITELLM_MODEL,
+                    "model": LITELLM_MODEL,  # Use model defined in `.env`
                     "messages": request.messages
                 },
                 headers=headers
