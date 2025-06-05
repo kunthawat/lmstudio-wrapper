@@ -98,3 +98,6 @@ def health_check():
         "model": os.getenv("LITELLM_MODEL", "unknown"),
         "proxy_url": os.getenv("LITELLM_PROXY_URL", "unknown")
     }
+
+logger.info(f"LiteLLM Response Status: {resp.status_code}")
+logger.info(f"LiteLLM Response Body: {resp.text}")
