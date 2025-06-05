@@ -59,35 +59,31 @@ async def openai_compatible_chat(
 ):
     """
     Proxy for OpenAI-style chat completions.
-    Accepts both `x-api-key` and `Authorization: Bearer <key>` headers.
     """
     verify_api_key(x_api_key, authorization)
-    
+
     try:
         # Flatten messages into a single prompt
         prompt = "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
-        result = await agent.arun(prompt)
+
+        # Determine if we need to pass the API key
+        LITELLM_MODEL = os.getenv("LITELLM_MODEL", "ollama_chat/qwen3-30b-a3b")
+        headers = {}
+
+        # Only send API key if the model requires it (e.g., OpenAI)
+        if LITELLM_MODEL.startswith("openai/"):
+            headers["Authorization"] = f"Bearer {os.getenv('LITELLM_API_KEY')}"
         
-        # Format response to match OpenAI format
-        return {
-            "id": "chatcmpl-123",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": os.getenv("LITELLM_MODEL", "custom-model"),
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": result
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{os.getenv('LITELLM_PROXY_URL', 'https://litellm.moreminimore.com/v1')}/chat/completions",
+                json={
+                    "model": LITELLM_MODEL,
+                    "messages": request.messages
                 },
-                "finish_reason": "stop"
-            }],
-            "usage": {
-                "prompt_tokens": len(prompt.split()),
-                "completion_tokens": len(result.split()),
-                "total_tokens": len(prompt.split()) + len(result.split())
-            }
-        }
+                headers=headers
+            )
+            return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
