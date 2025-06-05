@@ -1,3 +1,6 @@
+# app/tools.py
+from langchain.tools import Tool  # ← Add this line
+
 def search(query: str) -> str:
     return f"Search result for '{query}'"
 
