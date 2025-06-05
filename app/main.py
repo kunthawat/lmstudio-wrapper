@@ -1,4 +1,7 @@
 # app/main.py
+import logging
+
+
 
 from fastapi import FastAPI, Depends, HTTPException, Header
 from pydantic import BaseModel
@@ -8,6 +11,10 @@ from app.api_key_middleware import verify_api_key
 import os
 import time
 import httpx
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -98,6 +105,3 @@ def health_check():
         "model": os.getenv("LITELLM_MODEL", "unknown"),
         "proxy_url": os.getenv("LITELLM_PROXY_URL", "unknown")
     }
-
-logger.info(f"LiteLLM Response Status: {resp.status_code}")
-logger.info(f"LiteLLM Response Body: {resp.text}")
