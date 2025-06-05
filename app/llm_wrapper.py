@@ -1,6 +1,6 @@
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 import os
