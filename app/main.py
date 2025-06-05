@@ -61,41 +61,56 @@ class ChatCompletionRequest(BaseModel):
 @app.post("/v1/chat/completions")
 async def openai_compatible_chat(
     request: ChatCompletionRequest,
-    x_api_key: str = Header(None),
     authorization: str = Header(None)
 ):
-    """
-    Proxy for OpenAI-style chat completions.
-    """
-    verify_api_key(x_api_key, authorization)
+    verify_api_key(authorization)
 
-    try:
-        LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1")
-        LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
+    LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1") 
+    LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
 
-        headers = {
-            "Content-Type": "application/json"
-        }
-        if LITELLM_API_KEY:
-            headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LITELLM_API_KEY}"
+    }
 
-        # Use the model from the request, not .env
-        model = request.model
-
-        async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient() as client:
+        try:
             resp = await client.post(
                 f"{LITELLM_PROXY_URL}/chat/completions",
-                json={"model": model, "messages": request.messages},
+                json=request.dict(),
                 headers=headers,
                 timeout=30.0
             )
 
-            # Return raw LiteLLM response (no parsing)
-            return resp.json()
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Upstream error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            # Normalize response before returning
+            upstream_data = resp.json()
+
+            # Clean up LiteLLM’s extended response to match n8n's expected format
+            cleaned_data = {
+                "id": upstream_data.get("id"),
+                "object": upstream_data.get("object"),
+                "created": upstream_data.get("created"),
+                "model": upstream_data.get("model"),
+                "choices": [
+                    {
+                        "index": choice.get("index"),
+                        "message": {
+                            "role": choice.get("role"),
+                            "content": choice.get("content"),
+                        },
+                        "finish_reason": choice.get("finish_reason"),
+                    }
+                    for choice in upstream_data.get("choices", [])
+                ],
+                "usage": upstream_data.get("usage", {}),
+            }
+
+            return cleaned_data
+
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Upstream error: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 # --- Health Check ---
 @app.get("/")
