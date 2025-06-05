@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException
+# app/main.py
+
+from fastapi import FastAPI, Depends, HTTPException, Header
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from app.llm_wrapper import agent
@@ -11,7 +13,16 @@ app = FastAPI()
 
 # --- OpenAI-Compatible Model List Endpoint ---
 @app.get("/v1/models")
-async def get_models(api_key: str = Depends(verify_api_key)):
+async def get_models(
+    x_api_key: str = Header(None),
+    authorization: str = Header(None)
+):
+    """
+    Proxy for LiteLLM's /models endpoint.
+    Supports both `x-api-key` and `Authorization: Bearer <key>` headers.
+    """
+    await verify_api_key(x_api_key, authorization)
+
     LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://localhost:4000")
     
     async with httpx.AsyncClient() as client:
@@ -19,6 +30,7 @@ async def get_models(api_key: str = Depends(verify_api_key)):
             resp = await client.get(f"{LITELLM_PROXY_URL}/models")
             data = resp.json()
             
+            # Optional: Filter/sanitize model names for n8n
             filtered_models = [
                 {**model, "id": model["id"].replace("ollama_chat/", "")} 
                 for model in data.get("data", [])
@@ -37,12 +49,21 @@ class ChatCompletionRequest(BaseModel):
 @app.post("/v1/chat/completions")
 async def openai_compatible_chat(
     request: ChatCompletionRequest,
-    authorization: str = Depends(verify_api_key)
+    x_api_key: str = Header(None),
+    authorization: str = Header(None)
 ):
+    """
+    Proxy for OpenAI-style chat completions.
+    Accepts both `x-api-key` and `Authorization: Bearer <key>` headers.
+    """
+    await verify_api_key(x_api_key, authorization)
+    
     try:
+        # Flatten messages into a single prompt
         prompt = "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
         result = await agent.arun(prompt)
         
+        # Format response to match OpenAI format
         return {
             "id": "chatcmpl-123",
             "object": "chat.completion",
