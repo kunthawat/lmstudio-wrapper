@@ -3,3 +3,4 @@ uvicorn>=0.21.1
 langchain>=0.0.343
 pydantic>=1.10.7
 python-dotenv>=1.0.0
+langchain-community>=0.3.0
