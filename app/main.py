@@ -61,9 +61,10 @@ class ChatCompletionRequest(BaseModel):
 @app.post("/v1/chat/completions")
 async def openai_compatible_chat(
     request: ChatCompletionRequest,
+    x_api_key: str = Header(None),
     authorization: str = Header(None)
 ):
-    verify_api_key(authorization)
+    verify_api_key(x_api_key, authorization)
 
     LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1") 
     LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
@@ -82,27 +83,22 @@ async def openai_compatible_chat(
                 timeout=30.0
             )
 
-            # Ensure we get a valid JSON response
             upstream_data = resp.json()
 
-            # Extract and normalize response
-            if not upstream_data.get("choices") or not upstream_data["choices"][0].get("message"):
-                raise HTTPException(status_code=502, detail="Invalid response from upstream")
-
-            # Clean up LiteLLM's extended response to match n8n/OpenAI format
+            # Ensure content and role are preserved
             cleaned_data = {
                 "id": upstream_data.get("id"),
-                "object": upstream_data.get("object", "chat.completion"),
-                "created": upstream_data.get("created", int(time.time())),
-                "model": upstream_data.get("model", "unknown"),
+                "object": upstream_data.get("object"),
+                "created": upstream_data.get("created"),
+                "model": upstream_data.get("model"),
                 "choices": [
                     {
-                        "index": choice.get("index", 0),
+                        "index": choice.get("index"),
                         "message": {
-                            "role": choice["message"].get("role", "assistant"),
-                            "content": choice["message"].get("content", "")
+                            "role": choice["message"].get("role"),
+                            "content": choice["message"].get("content")
                         },
-                        "finish_reason": choice.get("finish_reason")
+                        "finish_reason": choice.get("finish_reason"),
                     }
                     for choice in upstream_data.get("choices", [])
                 ],
@@ -110,13 +106,15 @@ async def openai_compatible_chat(
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "total_tokens": 0
-                })
+                }),
             }
 
             return cleaned_data
 
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Upstream error: {str(e)}")
+        except KeyError as e:
+            raise HTTPException(status_code=502, detail=f"Missing expected field in LiteLLM response: {str(e)}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
