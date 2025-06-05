@@ -64,20 +64,29 @@ async def openai_compatible_chat(
 
     try:
         LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://litellm.moreminimore.com/v1")
-        LITELLM_MODEL = os.getenv("LITELLM_MODEL", "ollama_chat/qwen3-30b-a3b")
         LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
 
-        headers = {}
+        headers = {
+            "Content-Type": "application/json"
+        }
         if LITELLM_API_KEY:
             headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+
+        # Use the model from the request, not .env
+        model = request.model
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{LITELLM_PROXY_URL}/chat/completions",
-                json={"model": LITELLM_MODEL, "messages": request.messages},
-                headers=headers
+                json={"model": model, "messages": request.messages},
+                headers=headers,
+                timeout=30.0
             )
-            return resp.json()  # Forward LiteLLM's response directly
+
+            # Return raw LiteLLM response (no parsing)
+            return resp.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Upstream error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
