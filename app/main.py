@@ -70,7 +70,7 @@ async def openai_compatible_chat(
     verify_api_key(x_api_key, authorization)
 
     try:
-        LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://litellm.moreminimore.com/v1")
+        LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1")
         LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
 
         headers = {
