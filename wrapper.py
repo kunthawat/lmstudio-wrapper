@@ -4,7 +4,7 @@ import os
 import json
 from typing import Optional, List, Dict, Any, Union
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import httpx
@@ -12,27 +12,30 @@ import httpx
 # -----------------------------------------------------------------------------
 # 1) Load environment variables from .env (if present)
 # -----------------------------------------------------------------------------
-load_dotenv()  # loads variables from a .env file in the same directory, if it exists
+load_dotenv()
 
-# Choose which backend to forward to: "lmstudio" or "litellm"
+# Which backend to use: "lmstudio" or "litellm"
 BACKEND: str = os.getenv("BACKEND", "lmstudio").lower()
 
-# URL of LM Studio’s chat endpoint (OpenAI-compatible)
+# LM Studio chat endpoint (OpenAI‐compatible)
 LMSTUDIO_URL: str = os.getenv(
     "LMSTUDIO_URL", "http://127.0.0.1:1234/v1/chat/completions"
 )
 
-# URL of LiteLLM’s chat endpoint (OpenAI-compatible)
+# LiteLLM chat endpoint (OpenAI‐compatible)
 LITELLM_URL: str = os.getenv(
     "LITELLM_URL", "http://127.0.0.1:8080/v1/chat/completions"
 )
+
+# (Optional) LiteLLM API key, if you have configured LiteLLM to require one
+LITELLM_API_KEY: Optional[str] = os.getenv("LITELLM_API_KEY", None)
 
 WRAPPER_HOST: str = os.getenv("WRAPPER_HOST", "0.0.0.0")
 WRAPPER_PORT: int = int(os.getenv("WRAPPER_PORT", "8000"))
 DEBUG: bool = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes")
 
 # -----------------------------------------------------------------------------
-# 2) Define Pydantic models that match OpenAI-style ChatCompletion
+# 2) Define Pydantic models matching OpenAI's ChatCompletion schema
 # -----------------------------------------------------------------------------
 class ChatMessage(BaseModel):
     role: str
@@ -59,21 +62,30 @@ app = FastAPI(title="LM Studio / LiteLLM Wrapper", debug=DEBUG)
 
 def get_backend_url() -> str:
     """
-    Returns the correct chat-completions URL based on BACKEND.
+    Return the correct chat-completions URL based on BACKEND.
     """
     if BACKEND == "litellm":
         return LITELLM_URL
-    # Fallback to LM Studio for any other or missing value
     return LMSTUDIO_URL
+
+def get_auth_headers() -> Dict[str, str]\:
+    """
+    If we're using LiteLLM and an API key is set, return the Authorization header.
+    Otherwise, return an empty dict.
+    """
+    if BACKEND == "litellm" and LITELLM_API_KEY:
+        return {"Authorization": f"Bearer {LITELLM_API_KEY}"}
+    return {}
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
     """
     Receive an OpenAI‐compatible ChatCompletionRequest,
-    forward it to LM Studio or LiteLLM (depending on BACKEND),
+    forward it to LM Studio or LiteLLM (based on BACKEND),
     and return the raw JSON response.
     """
     target_url = get_backend_url()
+    auth_headers = get_auth_headers()
 
     # Build payload for downstream LLM
     payload: Dict[str, Any] = {
@@ -92,9 +104,13 @@ async def chat_completions(req: ChatCompletionRequest):
     # Forward to chosen backend and catch errors
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            resp = await client.post(target_url, json=payload)
-            resp.raise_for_status()
-            downstream_json = resp.json()
+            lm_resp = await client.post(
+                target_url,
+                json=payload,
+                headers={**auth_headers, "Content-Type": "application/json"},
+            )
+            lm_resp.raise_for_status()
+            downstream_json = lm_resp.json()
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=502,
@@ -122,4 +138,3 @@ if __name__ == "__main__":
         port=WRAPPER_PORT,
         reload=DEBUG,
     )
-
