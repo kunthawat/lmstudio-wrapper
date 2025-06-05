@@ -21,7 +21,7 @@ async def get_models(
     Proxy for LiteLLM's /models endpoint.
     Supports both `x-api-key` and `Authorization: Bearer <key>` headers.
     """
-    await verify_api_key(x_api_key, authorization)
+    verify_api_key(x_api_key, authorization)
 
     LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "http://localhost:4000")
     
@@ -56,7 +56,7 @@ async def openai_compatible_chat(
     Proxy for OpenAI-style chat completions.
     Accepts both `x-api-key` and `Authorization: Bearer <key>` headers.
     """
-    await verify_api_key(x_api_key, authorization)
+    verify_api_key(x_api_key, authorization)
     
     try:
         # Flatten messages into a single prompt
