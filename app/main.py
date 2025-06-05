@@ -61,9 +61,10 @@ class ChatCompletionRequest(BaseModel):
 @app.post("/v1/chat/completions")
 async def openai_compatible_chat(
     request: ChatCompletionRequest,
+    x_api_key: str = Header(None),
     authorization: str = Header(None)
 ):
-    verify_api_key(authorization)
+    verify_api_key(x_api_key, authorization)
 
     LITELLM_PROXY_URL = os.getenv("LITELLM_PROXY_URL", "https://litellm.moreminimore.com/v1") 
     LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "missing-key")
@@ -119,4 +120,12 @@ def health_check():
         "status": "Running",
         "model": os.getenv("LITELLM_MODEL", "unknown"),
         "proxy_url": os.getenv("LITELLM_PROXY_URL", "unknown")
+    }
+
+@app.get("/debug")
+async def debug_env():
+    return {
+        "API_KEY": os.getenv("API_KEY"),
+        "LITELLM_PROXY_URL": os.getenv("LITELLM_PROXY_URL"),
+        "LITELLM_API_KEY": os.getenv("LITELLM_API_KEY")
     }
