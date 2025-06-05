@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from app.llm_wrapper import agent
+from app.api_key_middleware import verify_api_key  # Ensure this import is present
 import os
 
 app = FastAPI()
